@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Scorch Pad">
+<meta name="theme-color" content="#0b0b1a">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Scorch Pad</title>
+<style>
+  :root {
+    --bg: #0b0b1a;
+    --panel: #1a1a33;
+    --btn: #c0c0c8;          /* DOS-menu grey */
+    --btn-hi: #ffffff;
+    --btn-lo: #5a5a66;
+    --ink: #10101c;
+    --fire: #e0301e;
+    --accent: #3fd2ff;
+    --gold: #ffd23f;
+    --muted: #8a8aa8;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: linear-gradient(180deg, #1a1aa0 0%, #6a2aa0 45%, #c02a50 75%, #e06a20 100%) fixed;
+    background-color: var(--bg);
+    color: #fff;
+    font: 600 16px/1.2 "Courier New", ui-monospace, monospace;
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: manipulation;
+    overscroll-behavior: none;
+    padding: 0;
+  }
+  .app { display: flex; flex-direction: column; height: 100%; height: 100dvh; max-width: 900px; margin: 0 auto; padding: calc(8px + env(safe-area-inset-top)) calc(12px + env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) calc(12px + env(safe-area-inset-left)); gap: 10px; }
+
+  header { display: flex; align-items: center; gap: 10px; }
+  header h1 { font-size: 18px; margin: 0; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; flex: 1; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; background: #777; box-shadow: 0 0 0 2px #000; }
+  .dot.ok { background: #3f3; } .dot.bad { background: #f33; }
+
+  nav { display: flex; gap: 6px; }
+  nav button { flex: 1; }
+
+  /* DOS-style bevelled button */
+  button {
+    font: inherit; color: var(--ink); background: var(--btn);
+    border: 0; border-radius: 0; padding: 10px 6px; min-height: 48px;
+    box-shadow: inset 3px 3px 0 var(--btn-hi), inset -3px -3px 0 var(--btn-lo), 0 0 0 2px #000;
+    touch-action: none;
+  }
+  button.on, button:active, button.pressed {
+    box-shadow: inset 3px 3px 0 var(--btn-lo), inset -3px -3px 0 var(--btn-hi), 0 0 0 2px #000;
+    background: #a8a8b4;
+  }
+  nav button.on { background: var(--gold); }
+
+  .page { display: none; flex: 1; min-height: 0; flex-direction: column; gap: 10px; }
+  .page.on { display: flex; }
+
+  .card { background: rgba(10,10,30,.72); border: 2px solid #000; box-shadow: inset 0 0 0 2px #444a; padding: 10px; }
+  .label { font-size: 12px; color: var(--gold); letter-spacing: 2px; margin: 0 0 8px; text-transform: uppercase; }
+
+  /* battle layout: one screen, no scrolling, FIRE always visible */
+  .battle {
+    flex: 1; min-height: 0; display: grid; gap: 8px;
+    grid-template-columns: repeat(6, 1fr);
+    grid-template-rows: 1.3fr 1.3fr .8fr 1fr .8fr 1.6fr;
+    grid-template-areas:
+      "l l l r r r"
+      "dn dn dn up up up"
+      "pd pd pd pu pu pu"
+      "prev prev next next inv inv"
+      "esc esc ent ent ent ent"
+      "fire fire fire fire fire fire";
+  }
+  .battle button { min-height: 0; font-size: 16px; padding: 4px; }
+  .battle button b { display: block; font-size: 30px; line-height: 1; }
+  #fire {
+    font-size: 36px; letter-spacing: 6px;
+    background: var(--fire); color: #fff; text-shadow: 2px 2px 0 #000;
+    box-shadow: inset 4px 4px 0 #ff8a7a, inset -4px -4px 0 #7a1008, 0 0 0 2px #000;
+  }
+  #fire:active, #fire.pressed { box-shadow: inset 4px 4px 0 #7a1008, inset -4px -4px 0 #ff8a7a, 0 0 0 2px #000; background: #b02010; }
+  .hint { font-size: 11px; color: var(--muted); font-weight: 400; }
+  .sub { display: block; font-size: 10px; letter-spacing: 1px; opacity: .7; margin-top: 3px; }
+
+  @media (orientation: landscape) {
+    .app { max-width: none; gap: 6px; padding-top: 6px; }
+    header h1 { font-size: 15px; }
+    header button, nav button { min-height: 34px !important; padding: 4px !important; }
+    .battle {
+      grid-template-columns: repeat(8, 1fr);
+      grid-template-rows: 1fr 1fr 1fr 1fr;
+      grid-template-areas:
+        "l l r r prev prev next next"
+        "l l r r inv esc ent ent"
+        "dn dn up up fire fire fire fire"
+        "pd pd pu pu fire fire fire fire";
+    }
+  }
+
+  /* keyboard page */
+  .keys { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 5px; }
+  .keys button { min-height: 44px; padding: 6px 0; font-size: 14px; overflow: hidden; }
+  .keys .w2 { grid-column: span 2; } .keys .w3 { grid-column: span 3; } .keys .w4 { grid-column: span 4; }
+  .row { display: flex; gap: 8px; }
+  .row input { flex: 1; font: inherit; padding: 10px; border: 2px solid #000; background: #eee; color: #000; min-width: 0; border-radius: 0; }
+  .scroll { overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+
+  /* mouse page */
+  #trackpad {
+    flex: 1; min-height: 220px; background: #0d0d24;
+    border: 2px solid #000; box-shadow: inset 0 0 0 2px #3fd2ff55;
+    display: grid; place-items: center; color: var(--muted); font-size: 13px; text-align: center;
+    touch-action: none;
+  }
+  .mbtns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .mbtns button { min-height: 64px; }
+
+  #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: #000; color: #f66; padding: 8px 12px; font-size: 13px; display: none; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <span class="dot" id="dot"></span>
+    <h1>SCORCH PAD</h1>
+    <button id="relBtn" style="min-height:36px;padding:4px 10px;font-size:12px">Unstick</button>
+  </header>
+
+  <nav>
+    <button data-page="battle" class="on">Battle</button>
+    <button data-page="keys">Keys</button>
+    <button data-page="mouse">Mouse</button>
+  </nav>
+
+  <!-- ===== BATTLE ===== -->
+  <section class="page on" id="battle">
+    <div class="battle">
+      <button style="grid-area:l"  data-key="left"  data-repeat><b>◀</b><span class="sub">ANGLE LEFT</span></button>
+      <button style="grid-area:r"  data-key="right" data-repeat><b>▶</b><span class="sub">ANGLE RIGHT</span></button>
+      <button style="grid-area:dn" data-key="down"  data-repeat><b>▼</b><span class="sub">POWER −</span></button>
+      <button style="grid-area:up" data-key="up"    data-repeat><b>▲</b><span class="sub">POWER +</span></button>
+      <button style="grid-area:pd" data-key="pagedown" data-repeat>PgDn<span class="sub">POWER −−</span></button>
+      <button style="grid-area:pu" data-key="pageup"   data-repeat>PgUp<span class="sub">POWER ++</span></button>
+      <button style="grid-area:prev" data-combo="shift+tab">◁ Weapon<span class="sub">SHIFT+TAB</span></button>
+      <button style="grid-area:next" data-key="tab" data-repeat>Weapon ▷<span class="sub">TAB</span></button>
+      <button style="grid-area:inv" data-key="i">Inv<span class="sub">I</span></button>
+      <button style="grid-area:esc" data-key="esc">Esc<span class="sub">MENU</span></button>
+      <button style="grid-area:ent" data-key="enter">Enter<span class="sub">OK</span></button>
+      <button style="grid-area:fire" id="fire" data-key="space">FIRE!</button>
+    </div>
+  </section>
+
+  <!-- ===== KEYBOARD ===== -->
+  <section class="page" id="keys">
+    <div class="scroll">
+      <div class="card">
+        <p class="label">Type text (player names etc.)</p>
+        <div class="row">
+          <input id="text" placeholder="Hello world" autocomplete="off" autocapitalize="off" spellcheck="false">
+          <button id="sendText" style="min-width:80px">Send</button>
+        </div>
+        <label class="hint" style="display:block;margin-top:8px"><input type="checkbox" id="withEnter" checked> press Enter after sending</label>
+      </div>
+      <div class="card">
+        <p class="label">Keyboard</p>
+        <div class="keys" id="kb"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== MOUSE ===== -->
+  <section class="page" id="mouse">
+    <div id="trackpad">Drag to move the mouse<br>tap = left click · two-finger tap = right click</div>
+    <div class="mbtns">
+      <button data-click="left">Left click</button>
+      <button data-click="right">Right click</button>
+    </div>
+    <label class="hint">Speed <input type="range" id="speed" min="0.5" max="5" step="0.25" value="2"></label>
+  </section>
+</div>
+<div id="toast"></div>
+
+<script>
+(() => {
+  // ---- token (optional): open the page once as /?token=xyz and it is remembered
+  const params = new URLSearchParams(location.search);
+  let token = params.get('token') || '';
+  try { if (token) localStorage.setItem('scorchToken', token); else token = localStorage.getItem('scorchToken') || ''; } catch (e) {}
+
+  const dot = document.getElementById('dot');
+  const toast = document.getElementById('toast');
+  let toastTimer;
+  function showError(msg) {
+    toast.textContent = msg; toast.style.display = 'block';
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.style.display = 'none', 2500);
+  }
+
+  function api(path, args = {}) {
+    const q = new URLSearchParams(args);
+    if (token) q.set('token', token);
+    return fetch(`/api/${path}?${q}`, { method: 'POST', cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => { dot.className = 'dot ok'; if (!j.ok) showError(j.error); return j; })
+      .catch(err => { dot.className = 'dot bad'; showError('Pi not reachable'); throw err; });
+  }
+
+  // ---- tabs
+  document.querySelectorAll('nav button').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b));
+    document.querySelectorAll('.page').forEach(p => p.classList.toggle('on', p.id === b.dataset.page));
+    try { localStorage.setItem('scorchPage', b.dataset.page); } catch (e) {}
+  }));
+  try {
+    const p = localStorage.getItem('scorchPage');
+    if (p) document.querySelector(`nav button[data-page="${p}"]`)?.click();
+  } catch (e) {}
+
+  // ---- buttons: tap, or hold to repeat with acceleration
+  function bindKeyButton(btn) {
+    const key = btn.dataset.key, combo = btn.dataset.combo, repeat = 'repeat' in btn.dataset;
+    let timer = null, holding = false, busy = false, delay;
+
+    const send = () => {
+      if (busy) return;           // don't queue up a backlog on slow wifi
+      busy = true;
+      (combo ? api('combo', { keys: combo }) : api('tap', { key }))
+        .finally(() => busy = false);
+    };
+    const loop = () => {
+      if (!holding) return;
+      send();
+      delay = Math.max(35, delay * 0.85);
+      timer = setTimeout(loop, delay);
+    };
+    btn.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      btn.setPointerCapture?.(e.pointerId);
+      btn.classList.add('pressed');
+      holding = true; send();
+      if (repeat) { delay = 140; timer = setTimeout(loop, 380); }
+    });
+    const stop = () => { holding = false; clearTimeout(timer); btn.classList.remove('pressed'); };
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => btn.addEventListener(ev, stop));
+    btn.addEventListener('contextmenu', e => e.preventDefault());
+  }
+
+  // ---- on-screen keyboard
+  const kb = document.getElementById('kb');
+  const layout = [
+    ['esc','f1','f2','f3','f4','f5','f6','f7','f8','f9'],
+    ['1','2','3','4','5','6','7','8','9','0'],
+    ['q','w','e','r','t','y','u','i','o','p'],
+    ['a','s','d','f','g','h','j','k','l','backspace:⌫'],
+    ['z','x','c','v','b','n','m','f10','up:▲','enter:⏎'],
+    ['tab:Tab:w2','space:Space:w3','pageup:P↑','pagedown:P↓','left:◀','down:▼','right:▶'],
+  ];
+  for (const row of layout) for (const spec of row) {
+    const [key, label, cls] = spec.split(':');
+    const b = document.createElement('button');
+    b.dataset.key = key;
+    if (['up','down','left','right','backspace','pageup','pagedown'].includes(key)) b.dataset.repeat = '';
+    b.textContent = (label || key).toUpperCase();
+    if (cls) b.className = cls;
+    kb.appendChild(b);
+  }
+
+  document.querySelectorAll('[data-key],[data-combo]').forEach(bindKeyButton);
+
+  document.getElementById('sendText').addEventListener('click', () => {
+    const input = document.getElementById('text');
+    const text = input.value + (document.getElementById('withEnter').checked ? '\n' : '');
+    if (!text) return;
+    api('type', { text }).then(() => { input.value = ''; });
+  });
+
+  document.getElementById('relBtn').addEventListener('click', () => api('release'));
+
+  // ---- trackpad
+  const pad = document.getElementById('trackpad');
+  const speed = document.getElementById('speed');
+  let last = null, accX = 0, accY = 0, moved = 0, startT = 0, maxTouches = 0, flushing = false;
+  function flush() {
+    if (flushing || (!Math.round(accX) && !Math.round(accY))) return;
+    const dx = Math.round(accX), dy = Math.round(accY);
+    accX -= dx; accY -= dy; flushing = true;
+    api('mouse', { dx, dy }).finally(() => { flushing = false; flush(); });
+  }
+  pad.addEventListener('touchstart', e => {
+    e.preventDefault();
+    const t = e.touches[0];
+    last = { x: t.clientX, y: t.clientY };
+    if (e.touches.length === 1) { moved = 0; startT = Date.now(); maxTouches = 1; }
+    maxTouches = Math.max(maxTouches, e.touches.length);
+  }, { passive: false });
+  pad.addEventListener('touchmove', e => {
+    e.preventDefault();
+    const t = e.touches[0];
+    const dx = t.clientX - last.x, dy = t.clientY - last.y;
+    last = { x: t.clientX, y: t.clientY };
+    moved += Math.abs(dx) + Math.abs(dy);
+    const s = +speed.value;
+    const a = 1 + Math.min(2, Math.hypot(dx, dy) / 12); // small acceleration
+    accX += dx * s * a; accY += dy * s * a;
+    flush();
+  }, { passive: false });
+  pad.addEventListener('touchend', e => {
+    e.preventDefault();
+    if (e.touches.length) return;
+    if (moved < 8 && Date.now() - startT < 300) api('click', { button: maxTouches > 1 ? 'right' : 'left' });
+  }, { passive: false });
+  // desktop testing with a real mouse
+  pad.addEventListener('mousedown', e => { last = { x: e.clientX, y: e.clientY }; });
+  pad.addEventListener('mousemove', e => {
+    if (!(e.buttons & 1) || !last) return;
+    accX += (e.clientX - last.x) * +speed.value; accY += (e.clientY - last.y) * +speed.value;
+    last = { x: e.clientX, y: e.clientY }; flush();
+  });
+  document.querySelectorAll('[data-click]').forEach(b =>
+    b.addEventListener('click', () => api('click', { button: b.dataset.click })));
+  try {
+    const s = localStorage.getItem('scorchSpeed'); if (s) speed.value = s;
+    speed.addEventListener('change', () => localStorage.setItem('scorchSpeed', speed.value));
+  } catch (e) {}
+
+  // ---- connection indicator
+  const ping = () => api('ping').catch(() => {});
+  ping(); setInterval(ping, 5000);
+})();
+</script>
+</body>
+</html>

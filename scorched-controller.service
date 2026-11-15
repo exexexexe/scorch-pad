@@ -1,0 +1,15 @@
+[Unit]
+Description=Scorched Earth phone controller
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# install.sh rewrites the path and user below
+ExecStart=/usr/bin/python3 /home/pi/scorched-controller/server.py --port 8080
+User=pi
+Group=input
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,9 @@
+{
+  "name": "Scorch Pad",
+  "short_name": "Scorch Pad",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0b0b1a",
+  "theme_color": "#0b0b1a"
+}
