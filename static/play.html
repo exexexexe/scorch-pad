@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scorched Earth</title>
+<link rel="stylesheet" href="/jsdos/js-dos.css">
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  #dos { position: fixed; inset: 0; }
+  #banner {
+    position: fixed; left: 50%; bottom: 4vh; transform: translateX(-50%);
+    font: 600 2.2vh/1.3 "Courier New", monospace; color: #fff;
+    background: rgba(0,0,0,.8); border: 3px solid #ffd23f; padding: 1.2vh 2vw;
+    z-index: 1000; cursor: pointer; text-align: center;
+  }
+  #banner small { display: block; color: #aaa; font-size: 1.6vh; margin-top: .4vh; }
+  #status {
+    position: fixed; right: 1.5vw; top: 1.5vh; z-index: 1000;
+    font: 600 1.6vh "Courier New", monospace; color: #fff;
+    background: rgba(0,0,0,.6); padding: .5vh 1vw; transition: opacity 1s;
+  }
+  #missing { color: #fff; font: 600 3vh "Courier New", monospace; padding: 10vh 8vw; display: none; }
+</style>
+</head>
+<body>
+<div id="dos"></div>
+<div id="missing">Scorched Earth isn't set up on the Pi yet.<br><br>
+  On the Pi run:<br>bash ~/scorched-controller/game/setup-game.sh &lt;your scorch zip&gt;</div>
+<div id="banner">Press OK on the remote for full screen &amp; sound
+  <small>Play with the controller on your phone</small></div>
+<div id="status">Connecting to controller…</div>
+
+<script src="/jsdos/js-dos.js"></script>
+<script>
+(() => {
+  const token = new URLSearchParams(location.search).get('token') || '';
+  const banner = document.getElementById('banner');
+  const status = document.getElementById('status');
+  let ci = null, dosProps = null, statusTimer;
+
+  function setStatus(text, fade) {
+    status.textContent = text; status.style.opacity = 1;
+    clearTimeout(statusTimer);
+    if (fade) statusTimer = setTimeout(() => status.style.opacity = 0, 3000);
+  }
+
+  // Controller key names -> js-dos key codes
+  const K = {
+    left: 263, right: 262, up: 265, down: 264, space: 32, enter: 257, esc: 256,
+    tab: 258, backspace: 259, insert: 260, delete: 261, pageup: 266, pagedown: 267,
+    home: 268, end: 269, shift: 340, ctrl: 341, alt: 342,
+    '-': 45, '=': 61, ',': 44, '.': 46, '/': 47, ';': 59, "'": 39,
+    '[': 91, ']': 93, '\\': 92, '`': 96, ' ': 32,
+    minus: 45, equal: 61, plus: 61, comma: 44, period: 46, slash: 47, semicolon: 59,
+    apostrophe: 39, leftbracket: 91, rightbracket: 93, backslash: 92,
+    return: 257, escape: 256, pgup: 266, pgdn: 267,
+  };
+  for (let i = 0; i < 26; i++) K[String.fromCharCode(97 + i)] = 65 + i;
+  for (let i = 0; i < 10; i++) K[String(i)] = 48 + i;
+  for (let i = 1; i <= 12; i++) K['f' + i] = 289 + i;
+  const BUTTONS = { left: 0, middle: 1, right: 2 };
+
+  // ---- start the game
+  fetch('/game/scorch.jsdos', { method: 'HEAD' }).then(r => {
+    if (!r.ok) throw new Error('missing');
+    dosProps = Dos(document.getElementById('dos'), {
+      url: '/game/scorch.jsdos',
+      pathPrefix: '/jsdos/emulators/',
+      autoStart: true,
+      kiosk: true,
+      noCloud: true,
+      onEvent: (event, arg) => { if (event === 'ci-ready') { ci = arg; } },
+    });
+  }).catch(() => {
+    document.getElementById('missing').style.display = 'block';
+    banner.style.display = 'none';
+  });
+
+  // ---- full screen + sound need one press on the TV remote
+  function goFull() {
+    banner.style.display = 'none';
+    const el = document.documentElement;
+    (el.requestFullscreen || el.webkitRequestFullscreen || (() => {})).call(el);
+  }
+  banner.addEventListener('click', goFull);
+  document.addEventListener('keydown', e => {
+    if (banner.style.display !== 'none' && (e.key === 'Enter' || e.keyCode === 13)) goFull();
+  }, true);
+
+  // ---- receive button presses from the phone (via the Pi)
+  function handle(ev) {
+    if (ev.t === 'stop') {
+      try { dosProps && dosProps.stop && dosProps.stop(); } catch (e) {}
+      document.body.innerHTML = '<div style="color:#fff;font:600 4vh Courier New;padding:20vh 10vw">Game closed. See you next time!</div>';
+      return;
+    }
+    if (ev.t === 'reload') { location.reload(); return; }
+    if (!ci) return;
+    if (ev.t === 'key' && K[ev.k] !== undefined) ci.sendKeyEvent(K[ev.k], !!ev.d);
+    else if (ev.t === 'move' && ci.sendMouseRelativeMotion) ci.sendMouseRelativeMotion(ev.dx, ev.dy);
+    else if (ev.t === 'btn' && ci.sendMouseButton) ci.sendMouseButton(BUTTONS[ev.b] ?? 0, !!ev.d);
+  }
+
+  function connect() {
+    const es = new EventSource('/api/events' + (token ? '?token=' + encodeURIComponent(token) : ''));
+    es.onopen = () => setStatus('🎮 Controller connected', true);
+    es.onmessage = m => { try { handle(JSON.parse(m.data)); } catch (e) {} };
+    es.onerror = () => setStatus('Controller disconnected – retrying…');
+  }
+  connect();
+})();
+</script>
+</body>
+</html>

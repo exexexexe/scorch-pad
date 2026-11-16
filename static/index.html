@@ -42,6 +42,7 @@
   header h1 { font-size: 18px; margin: 0; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; flex: 1; }
   .dot { width: 12px; height: 12px; border-radius: 50%; background: #777; box-shadow: 0 0 0 2px #000; }
   .dot.ok { background: #3f3; } .dot.bad { background: #f33; }
+  .tvstate { font-size: 11px; letter-spacing: 0; color: var(--gold); text-shadow: 1px 1px 0 #000; display: block; }
 
   nav { display: flex; gap: 6px; }
   nav button { flex: 1; }
@@ -130,7 +131,7 @@
 <div class="app">
   <header>
     <span class="dot" id="dot"></span>
-    <h1>SCORCH PAD</h1>
+    <h1>SCORCH PAD <span id="tvState" class="tvstate"></span></h1>
     <button id="playBtn" style="min-height:36px;padding:4px 10px;font-size:12px;background:var(--gold)">▶ Play on TV</button>
     <button id="relBtn" style="min-height:36px;padding:4px 10px;font-size:12px">Unstick</button>
   </header>
@@ -355,7 +356,12 @@
   } catch (e) {}
 
   // ---- connection indicator
-  const ping = () => api('ping').catch(() => {});
+  const tvState = document.getElementById('tvState');
+  const ping = () => api('status').then(j => {
+    if (j.screens) tvState.textContent = '📺 TV connected';
+    else if (j.tv === 'lg') tvState.textContent = 'TV not showing the game – press ▶ Play';
+    else tvState.textContent = j.keyboard ? '' : 'No TV connected';
+  }).catch(() => {});
   ping(); setInterval(ping, 5000);
 })();
 </script>

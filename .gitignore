@@ -1,2 +1,6 @@
 __pycache__/
 *.pyc
+.venv/
+lgtv.json
+static/jsdos/
+static/game/

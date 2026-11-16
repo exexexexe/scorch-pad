@@ -1,15 +1,17 @@
 # Scorch Pad — phone controller for Scorched Earth
 
 Control Scorched Earth on your TV from your phone. The Raspberry Pi runs a
-small web server. That server creates a **virtual USB keyboard and mouse**
-(Linux `uinput`), so the game gets real key presses. This works with
-DOSBox and with a browser running js-dos / DOS.Zone, on X11 and Wayland.
+small web server. The game runs in the TV's web browser, served by the Pi,
+and your phone's button presses travel to it over Wi-Fi (see *Play on the TV*
+below). If the game runs on a screen plugged into the Pi, the presses go
+through a virtual keyboard (Linux `uinput`) instead.
 
 ```
  iPhone (Safari / Home Screen app / Shortcuts / Siri)
         │  http://raspberrypi.local:8080
         ▼
- Raspberry Pi: server.py ──uinput──► "virtual keyboard" ──► Scorched Earth
+ Raspberry Pi: server.py ──Wi-Fi──► LG TV browser (/play) running Scorched Earth
+                       └─uinput─► or a game on the Pi's own screen
 ```
 
 Hot-seat play works out of the box: every player opens the same page, and
@@ -49,15 +51,18 @@ To test only the web page on any computer: `python3 server.py --dry-run`.
 In Safari open the page → Share → **Add to Home Screen**. It then opens
 full-screen like an app. Turn the phone sideways for the two-handed layout.
 
-## Play on the TV with one button
+## Play on the TV — wirelessly, with one button
 
-The Pi can run the game itself in **DOSBox**. One link then does everything:
-**wakes the TV, switches it to the Pi's HDMI input, and starts the game
-full-screen**.
+The Pi can sit in another room. It **hosts the game as a web page**, and the
+living-room **LG TV's web browser** plays it. Your phone's button presses go
+to the Pi, and the Pi passes them to the TV over Wi-Fi. No cables, and no
+video streaming, so there's no lag.
 
-The Pi has to be plugged into the TV with HDMI. On the TV, turn on HDMI-CEC.
-Each brand calls it something different: Samsung *Anynet+*, LG *SimpLink*,
-Sony *Bravia Sync*, Philips *EasyLink*, or just "HDMI-CEC" in the settings.
+```
+ phone ──Wi-Fi──► Pi (other room) ──Wi-Fi──► LG TV browser running the game
+                    │
+                    └── "Play" button: wakes the TV and opens the game on it
+```
 
 ### 1. Put the game on the Pi (once)
 
@@ -67,30 +72,38 @@ shareware archive, then copy it to the Pi:
 
 ```bash
 bash ~/scorched-controller/game/setup-game.sh ~/Downloads/scorch15.zip
-#   ...or a folder:  setup-game.sh /media/usb/SCORCH
-#   ...or a link:    setup-game.sh https://.../scorch.zip
 ```
 
-This installs DOSBox, unpacks the game to `~/games/scorch`, and writes a
-full-screen config.
+This downloads the in-browser DOS emulator (js-dos) to the Pi and packs the
+game for it. To check it worked, open `http://raspberrypi.local:8080/play` in
+any browser on your Wi-Fi.
 
-Test it from the Pi with `bash ~/scorched-controller/game/launch.sh`.
+### 2. Connect the LG TV (once)
 
-### 2. Buttons
+1. On the TV, turn on **Settings → General → Devices → TV Management →
+   Turn on via Wi-Fi**. On older models it's **Settings → Network → LG Connect
+   Apps** and **Mobile TV On**. This lets the Pi wake the TV from standby.
+2. With the TV on, run this on the Pi:
+   ```bash
+   ~/scorched-controller/.venv/bin/python ~/scorched-controller/tv/lgtv.py pair
+   ```
+   If it can't find the TV, add its IP address after `pair`. To find the IP:
+   TV Settings → Network → Wi-Fi → Advanced, or run `lgtv.py find`.
+3. Press **Allow** on the TV when it asks.
+
+### 3. Play
 
 | What | Link |
 |---|---|
-| ▶ Play on TV | `http://raspberrypi.local:8080/api/launch` |
-| ■ Quit game | `http://raspberrypi.local:8080/api/quit` |
-| Quit + TV off | `http://raspberrypi.local:8080/api/quit?tv=off` |
-| TV on (switch input to the Pi) | `http://raspberrypi.local:8080/api/tv?state=on` |
+| ▶ Game on the TV (wakes it, opens the game) | `http://raspberrypi.local:8080/api/launch` |
+| ■ Close the game | `http://raspberrypi.local:8080/api/quit` |
+| Close + TV off | `http://raspberrypi.local:8080/api/quit?tv=off` |
+| TV on / off | `http://raspberrypi.local:8080/api/tv?state=on` / `state=off` |
 
-Where to put these links:
-
-- **The phone controller:** it has a yellow **▶ Play on TV** button at the
-  top, and more under *Keys → TV & game*.
-- **Your dashboard:** make a button or link that opens (HTTP GET) the URL.
-  Example for **Home Assistant**, in `configuration.yaml`:
+- **Phone controller:** press the yellow **▶ Play on TV** button. The
+  header says **📺 TV connected** once the game is up on the TV.
+- **Your dashboard:** make a button that opens (HTTP GET) the launch URL.
+  For Home Assistant, in `configuration.yaml`:
   ```yaml
   rest_command:
     scorched_earth:
@@ -98,21 +111,29 @@ Where to put these links:
   ```
   Then add a dashboard button with `tap_action: perform-action` →
   `rest_command.scorched_earth`.
-- **Shortcuts / Siri:** "Get Contents of URL" → the launch link, named
-  "Game night".
+- **Shortcuts / Siri:** "Get Contents of URL" → the launch link.
 
-### Tweaks
+When the game opens, **press OK on the TV remote once**. That makes it full
+screen and turns on the sound; browsers only allow those after a button
+press. After that, play with the phones.
 
-- **Picture looks wrong or slow?** Edit `~/games/scorch/SCORCH/dosbox-scorch.conf`
-  (the folder may be named differently, depending on the zip). Change
-  `output=opengl` to `output=texture` (DOSBox Staging) or `output=overlay`
-  (classic DOSBox).
-- **TV doesn't switch input?** Run `bash ~/scorched-controller/game/tv.sh on`
-  in a terminal to see the message. Check that CEC is enabled on the TV.
-  With two HDMI ports, the TV may be on the other one: add
-  `Environment=CEC_DEV=/dev/cec1` to the service file.
-- The controller and the game are separate. Restarting the controller
-  doesn't close the game.
+### If something's off
+
+- **The TV opens the browser but the game doesn't start:** older TVs (before
+  about 2018) may have a browser too old for js-dos. Check that `/play` works
+  on your laptop. If it does, it's the TV.
+- **The TV doesn't wake up:** check the "Turn on via Wi-Fi" setting. Then run
+  `lgtv.py on` and read the message. Some TVs only wake over a network
+  cable, so turn it on with the remote and the button will still open the
+  game.
+- **The TV asks to "Allow" again:** pair again. LG sometimes forgets the
+  pairing after a firmware update.
+
+### Pi plugged into a screen instead?
+
+Without `lgtv.json`, the Play button runs the game on the Pi's own HDMI
+output with DOSBox. Set that up with `setup-game.sh <zip> --hdmi`.
+`game/tv.sh` then switches the TV over HDMI-CEC.
 
 ## The controller
 
@@ -174,9 +195,11 @@ form or JSON body.
 | `/api/mouse` | `dx`, `dy`, `wheel` | move the mouse |
 | `/api/click` | `button=left\|right\|middle`, optional `state=down\|up` | click |
 | `/api/keys` | — | list key names |
-| `/api/launch` | — | TV on, switch to the Pi, start the game |
-| `/api/quit` | `tv=off` (optional) | close the game (and TV standby) |
-| `/api/tv` | `state=on\|off` | TV over HDMI-CEC |
+| `/api/launch` | — | wake the TV and open the game on it |
+| `/api/quit` | `tv=off` (optional) | close the game (and turn the TV off) |
+| `/api/tv` | `state=on\|off` | just the TV |
+| `/api/status` | — | is the game showing on the TV? |
+| `/play` | — | the game page itself (what the TV opens) |
 
 ### Optional password
 
