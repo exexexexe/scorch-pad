@@ -8,7 +8,10 @@ Wants=network-online.target
 ExecStart=/usr/bin/python3 /home/pi/scorched-controller/server.py --port 8080
 User=pi
 Group=input
+SupplementaryGroups=video
 Restart=on-failure
+# restarting the controller must not close a running game
+KillMode=process
 RestartSec=2
 
 [Install]

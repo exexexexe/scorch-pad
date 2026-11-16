@@ -23,18 +23,33 @@ HTTP API (also what Apple Shortcuts calls - plain GET requests work):
     POST /api/mouse?dx=10&dy=-4        move the mouse
     POST /api/click?button=left        click
     GET  /api/keys                     list of key names
+    GET  /api/launch                   TV on + switch input + start the game
+    GET  /api/quit[?tv=off]            close the game (and put TV in standby)
+    GET  /api/tv?state=on|off          just the TV, over HDMI-CEC
 """
 
 import argparse
 import json
 import os
 import threading
+import subprocess
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATIC = os.path.join(HERE, "static")
+GAME = os.path.join(HERE, "game")
+
+
+def run_script(name, *args):
+    """Run one of the game/*.sh helpers and return (ok, output)."""
+    try:
+        r = subprocess.run(["bash", os.path.join(GAME, name), *args],
+                           capture_output=True, text=True, timeout=20)
+        return r.returncode == 0, (r.stdout + r.stderr).strip()
+    except subprocess.TimeoutExpired:
+        return False, f"{name} timed out"
 
 # Friendly key names -> evdev KEY_* names
 KEY_NAMES = {
@@ -312,6 +327,27 @@ class Handler(BaseHTTPRequestHandler):
                     return self._err("button must be left/right/middle")
                 st = q.get("state", [None])[0]
                 d.click(b, st if st in ("down", "up") else None)
+            elif path == "/api/launch":
+                if self.server.dry:
+                    print("  launch game")
+                    return self._ok(message="dry run")
+                d.release_all()
+                ok, out = run_script("launch.sh")
+                return self._send(200 if ok else 500, {"ok": ok, "message": out})
+            elif path == "/api/quit":
+                if self.server.dry:
+                    return self._ok(message="dry run")
+                tv_off = q.get("tv", [""])[0] == "off"
+                ok, out = run_script("quit.sh", *(["tv-off"] if tv_off else []))
+                return self._send(200 if ok else 500, {"ok": ok, "message": out})
+            elif path == "/api/tv":
+                state = q.get("state", ["on"])[0]
+                if state not in ("on", "off"):
+                    return self._err("state must be on or off")
+                if self.server.dry:
+                    return self._ok(message="dry run")
+                ok, out = run_script("tv.sh", state)
+                return self._send(200 if ok else 500, {"ok": ok, "message": out})
             elif path == "/api/keys":
                 return self._send(200, sorted(KEY_NAMES))
             elif path == "/api/ping":
@@ -353,6 +389,7 @@ def main():
     Handler.token = args.token
     srv = ThreadingHTTPServer((args.host, args.port), Handler)
     srv.verbose = args.verbose or args.dry_run
+    srv.dry = args.dry_run
     print(f"Scorched Earth controller on http://{args.host}:{args.port}"
           f"{'  (dry run)' if args.dry_run else ''}")
     try:

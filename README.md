@@ -49,6 +49,71 @@ To test only the web page on any computer: `python3 server.py --dry-run`.
 In Safari open the page → Share → **Add to Home Screen**. It then opens
 full-screen like an app. Turn the phone sideways for the two-handed layout.
 
+## Play on the TV with one button
+
+The Pi can run the game itself in **DOSBox**. One link then does everything:
+**wakes the TV, switches it to the Pi's HDMI input, and starts the game
+full-screen**.
+
+The Pi has to be plugged into the TV with HDMI. On the TV, turn on HDMI-CEC.
+Each brand calls it something different: Samsung *Anynet+*, LG *SimpLink*,
+Sony *Bravia Sync*, Philips *EasyLink*, or just "HDMI-CEC" in the settings.
+
+### 1. Put the game on the Pi (once)
+
+The game files aren't in this repo. Use your own copy of the shareware
+release (version 1.5): get the zip from the author's official site or a
+shareware archive, then copy it to the Pi:
+
+```bash
+bash ~/scorched-controller/game/setup-game.sh ~/Downloads/scorch15.zip
+#   ...or a folder:  setup-game.sh /media/usb/SCORCH
+#   ...or a link:    setup-game.sh https://.../scorch.zip
+```
+
+This installs DOSBox, unpacks the game to `~/games/scorch`, and writes a
+full-screen config.
+
+Test it from the Pi with `bash ~/scorched-controller/game/launch.sh`.
+
+### 2. Buttons
+
+| What | Link |
+|---|---|
+| ▶ Play on TV | `http://raspberrypi.local:8080/api/launch` |
+| ■ Quit game | `http://raspberrypi.local:8080/api/quit` |
+| Quit + TV off | `http://raspberrypi.local:8080/api/quit?tv=off` |
+| TV on (switch input to the Pi) | `http://raspberrypi.local:8080/api/tv?state=on` |
+
+Where to put these links:
+
+- **The phone controller:** it has a yellow **▶ Play on TV** button at the
+  top, and more under *Keys → TV & game*.
+- **Your dashboard:** make a button or link that opens (HTTP GET) the URL.
+  Example for **Home Assistant**, in `configuration.yaml`:
+  ```yaml
+  rest_command:
+    scorched_earth:
+      url: "http://raspberrypi.local:8080/api/launch"
+  ```
+  Then add a dashboard button with `tap_action: perform-action` →
+  `rest_command.scorched_earth`.
+- **Shortcuts / Siri:** "Get Contents of URL" → the launch link, named
+  "Game night".
+
+### Tweaks
+
+- **Picture looks wrong or slow?** Edit `~/games/scorch/SCORCH/dosbox-scorch.conf`
+  (the folder may be named differently, depending on the zip). Change
+  `output=opengl` to `output=texture` (DOSBox Staging) or `output=overlay`
+  (classic DOSBox).
+- **TV doesn't switch input?** Run `bash ~/scorched-controller/game/tv.sh on`
+  in a terminal to see the message. Check that CEC is enabled on the TV.
+  With two HDMI ports, the TV may be on the other one: add
+  `Environment=CEC_DEV=/dev/cec1` to the service file.
+- The controller and the game are separate. Restarting the controller
+  doesn't close the game.
+
 ## The controller
 
 | Tab | What's on it |
@@ -109,6 +174,9 @@ form or JSON body.
 | `/api/mouse` | `dx`, `dy`, `wheel` | move the mouse |
 | `/api/click` | `button=left\|right\|middle`, optional `state=down\|up` | click |
 | `/api/keys` | — | list key names |
+| `/api/launch` | — | TV on, switch to the Pi, start the game |
+| `/api/quit` | `tv=off` (optional) | close the game (and TV standby) |
+| `/api/tv` | `state=on\|off` | TV over HDMI-CEC |
 
 ### Optional password
 

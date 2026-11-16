@@ -109,6 +109,7 @@
   .keys button { min-height: 44px; padding: 6px 0; font-size: 14px; overflow: hidden; }
   .keys .w2 { grid-column: span 2; } .keys .w3 { grid-column: span 3; } .keys .w4 { grid-column: span 4; }
   .row { display: flex; gap: 8px; }
+  .tvrow { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .row input { flex: 1; font: inherit; padding: 10px; border: 2px solid #000; background: #eee; color: #000; min-width: 0; border-radius: 0; }
   .scroll { overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
 
@@ -130,6 +131,7 @@
   <header>
     <span class="dot" id="dot"></span>
     <h1>SCORCH PAD</h1>
+    <button id="playBtn" style="min-height:36px;padding:4px 10px;font-size:12px;background:var(--gold)">▶ Play on TV</button>
     <button id="relBtn" style="min-height:36px;padding:4px 10px;font-size:12px">Unstick</button>
   </header>
 
@@ -160,6 +162,15 @@
   <!-- ===== KEYBOARD ===== -->
   <section class="page" id="keys">
     <div class="scroll">
+      <div class="card">
+        <p class="label">TV &amp; game</p>
+        <div class="tvrow">
+          <button data-api="launch">▶ Start game</button>
+          <button data-api="quit" data-confirm="Close the game?">■ Quit game</button>
+          <button data-api="tv" data-args="state=on">TV on</button>
+          <button data-api="quit" data-args="tv=off" data-confirm="Quit the game and turn the TV off?">TV off</button>
+        </div>
+      </div>
       <div class="card">
         <p class="label">Type text (player names etc.)</p>
         <div class="row">
@@ -198,7 +209,7 @@
   const toast = document.getElementById('toast');
   let toastTimer;
   function showError(msg) {
-    toast.textContent = msg; toast.style.display = 'block';
+    toast.textContent = msg; toast.style.display = 'block'; toast.style.color = '#f66';
     clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.style.display = 'none', 2500);
   }
 
@@ -207,7 +218,7 @@
     if (token) q.set('token', token);
     return fetch(`/api/${path}?${q}`, { method: 'POST', cache: 'no-store' })
       .then(r => r.json())
-      .then(j => { dot.className = 'dot ok'; if (!j.ok) showError(j.error); return j; })
+      .then(j => { dot.className = 'dot ok'; if (!j.ok && j.error) showError(j.error); return j; })
       .catch(err => { dot.className = 'dot bad'; showError('Pi not reachable'); throw err; });
   }
 
@@ -281,6 +292,20 @@
   });
 
   document.getElementById('relBtn').addEventListener('click', () => api('release'));
+
+  // ---- game / TV
+  function gameCall(btn, path, args) {
+    if (btn.dataset.confirm && !confirm(btn.dataset.confirm)) return;
+    const label = btn.textContent;
+    btn.textContent = '…';
+    api(path, Object.fromEntries(new URLSearchParams(args || '')))
+      .then(j => { if (j.ok && j.message) showInfo(j.message); else if (!j.ok) showError(j.message || j.error); })
+      .finally(() => { btn.textContent = label; });
+  }
+  function showInfo(msg) { showError(msg); toast.style.color = '#6f6'; }
+  document.getElementById('playBtn').addEventListener('click', e => gameCall(e.currentTarget, 'launch'));
+  document.querySelectorAll('[data-api]').forEach(b =>
+    b.addEventListener('click', () => gameCall(b, b.dataset.api, b.dataset.args)));
 
   // ---- trackpad
   const pad = document.getElementById('trackpad');
